@@ -57,7 +57,7 @@ class TrafficDetector:
         self.cls_select = np.array([2,3,5,7]) # car,motocycle,bus,truck
         self.colors = [[np.random.randint(0, 255) for _ in range(3)] for _ in self.names]
 
-    def detect(self, img0):                
+    def detect(self, img0, output_ratio=1):
         # img0: cv2.imread
         img0 = img0.copy()
         # img: Padded resize
@@ -89,5 +89,7 @@ class TrafficDetector:
                     if int(cls) in self.cls_select:
                       label = f'{self.names[int(cls)]} {conf:.2f}'
                       plot_one_box(xyxy, img0, label=label, color=self.colors[int(cls)], line_thickness=3)
+        if output_ratio != 1:
+            img0 = img0[::output_ratio,::output_ratio]
         return img0
 
