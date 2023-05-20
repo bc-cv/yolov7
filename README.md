@@ -4,6 +4,7 @@
 
 ## Installation
 
+Make sure `conda` is installed [[link to miniconda]](https://docs.conda.io/en/latest/miniconda.html)
 ``` shell
 conda create -n yolov7
 source activate yolov7
