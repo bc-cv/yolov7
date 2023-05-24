@@ -57,19 +57,20 @@ class ObjectDetector:
         self.cls_to_id = coco80_classes_to_id()        
         self.colors = [[np.random.randint(0, 255) for _ in range(3)] for _ in self.names]
 
-    def detect(self, img0, cls_select_name=None, conf_thres=None, iou_thres=None, img_size=None, do_visual=True, visual_ratio=1):
-        if cls_select_name is None:            
-            print('Detecting all 80-class objects')
+    def detect(self, img0, cls_select_name=None, conf_thres=None, iou_thres=None, img_size=None, do_visual=True, visual_ratio=1, verbose=True):
+        if cls_select_name is None:
+            if verbose:
+                print('Detecting all 80-class objects')
             cls_select_id = range(80)
         else:
-            print(f'Detecting {cls_select_name}')
+            if verbose:
+                print(f'Detecting {cls_select_name}')
             cls_select_id = []
             for cls_name in cls_select_name:
-                if cls_name.lower() not in self.cls_to_id:
-                    print(f"Can not find class {cls_name}")                    
-                else:
+                if cls_name.lower() in self.cls_to_id:
                     cls_select_id.append(self.cls_to_id[cls_name.lower()])
-
+                elif verbose:
+                    print(f"Can not find class {cls_name}")                    
         if conf_thres is None:
             conf_thres = self.opt.conf_thres
         if iou_thres is None: 
@@ -108,14 +109,18 @@ class ObjectDetector:
                 det_select = np.in1d(det[:,-1].astype(int), cls_select_id)
                 if det_select.any():
                     output_det = np.vstack([output_det, det[det_select]])
-        return output_det
+        if do_visual:
+            output_visual = self.plot_box(img0, output_det, visual_ratio)
+            return output_visual
+        else:
+            return output_det
     
-    def plot_box(self, img0, boxes, visual_ratio=1):
+    def plot_box(self, img0, dets, visual_ratio=1):
         # boxes: Nx5 matrix: xyxy, label_id        
         img0 = img0.copy()
-        for box in boxes:
-            label = f'{self.names[int(box[5])]} {box[4]:.2f}'
-            plot_one_box(box[:4], img0, label=label, color=self.colors[int(box[5])], line_thickness=3)    
+        for det in dets:
+            label = f'{self.names[int(det[5])]} {det[4]:.2f}'
+            plot_one_box(det[:4], img0, label=label, color=self.colors[int(det[5])], line_thickness=3)    
         if visual_ratio != 1:
             img0 = img0[::visual_ratio, ::visual_ratio]
         return img0
