@@ -8,7 +8,7 @@ from utils.plots import plot_one_box
 from utils.torch_utils import select_device, TracedModel
 
 
-class TrafficDetector:
+class ObjectDetector:
     def __init__(self):
         self.load_default_conf()
 
@@ -32,13 +32,13 @@ class TrafficDetector:
         parser.add_argument('--augment', action='store_true', help='augmented inference')
         parser.add_argument('--update', action='store_true', help='update all models')
         parser.add_argument('--project', default='runs/detect', help='save results to project/name')                
-        parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
+        parser.add_argument('--trace', action='store_true', help='do trace model')
         self.opt = parser.parse_args(['--nosave'])
 
     def setup_model(self):
         self.device = select_device(self.opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        weights, imgsz, trace = self.opt.weights, self.opt.img_size, not self.opt.no_trace
+        weights, imgsz, trace = self.opt.weights, self.opt.img_size, self.opt.trace
         # Load model
         self.model = attempt_load(weights, map_location=self.device)  # load FP32 model
         self.stride = int(self.model.stride.max())  # model stride
@@ -59,9 +59,10 @@ class TrafficDetector:
 
     def detect(self, img0, cls_select_name=None, conf_thres=None, iou_thres=None, img_size=None, do_visual=True, visual_ratio=1):
         if cls_select_name is None:            
-            # detect all classes
+            print('Detecting all 80-class objects')
             cls_select_id = range(80)
         else:
+            print('Detecting {cls_select_name}')
             cls_select_id = []
             for cls_name in cls_select_name:
                 if cls_name.lower() not in self.cls_to_id:
@@ -97,16 +98,17 @@ class TrafficDetector:
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
 
         # Process detections
-        output_box = np.zeros([0, 6])
+        output_det = np.zeros([0, 6])
         for det in pred:
             if len(det):
                 # Rescale boxes from img_size to img size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
-                # Write results
-                for *xyxy, conf, cls in reversed(det):
-                    if int(cls) in cls_select_id:
-                        output_box = np.vstack([output_box, list(xyxy) + [cls] + [conf]])
-        return output_box
+                det = det.cpu().data.numpy() 
+
+                det_select = np.in1d(det[:,-1].astype(int), cls_select_id)
+                if det_select.any():
+                    output_det = np.vstack([output_det, det[det_select]])
+        return output_det
     
     def plot_box(self, img0, boxes, visual_ratio=1):
         # boxes: Nx5 matrix: xyxy, label_id        
