@@ -62,7 +62,7 @@ class ObjectDetector:
             print('Detecting all 80-class objects')
             cls_select_id = range(80)
         else:
-            print('Detecting {cls_select_name}')
+            print(f'Detecting {cls_select_name}')
             cls_select_id = []
             for cls_name in cls_select_name:
                 if cls_name.lower() not in self.cls_to_id:
@@ -114,8 +114,8 @@ class ObjectDetector:
         # boxes: Nx5 matrix: xyxy, label_id        
         img0 = img0.copy()
         for box in boxes:
-            label = f'{self.names[int(box[4])]} {box[5]:.2f}'
-            plot_one_box(box[:4], img0, label=label, color=self.colors[int(box[4])], line_thickness=3)    
+            label = f'{self.names[int(box[5])]} {box[4]:.2f}'
+            plot_one_box(box[:4], img0, label=label, color=self.colors[int(box[5])], line_thickness=3)    
         if visual_ratio != 1:
             img0 = img0[::visual_ratio, ::visual_ratio]
         return img0
