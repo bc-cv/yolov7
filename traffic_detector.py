@@ -1,12 +1,12 @@
 import argparse
 import numpy as np
-import cv2
 import torch
 from models.experimental import attempt_load
 from utils.datasets import letterbox
-from utils.general import check_img_size, non_max_suppression, scale_coords, xyxy2xywh
+from utils.general import check_img_size, non_max_suppression, scale_coords, coco80_classes_to_id
 from utils.plots import plot_one_box
-from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
+from utils.torch_utils import select_device, TracedModel
+
 
 class TrafficDetector:
     def __init__(self):
@@ -54,42 +54,66 @@ class TrafficDetector:
         # Get names and colors
         self.names = self.model.module.names if hasattr(self.model, 'module') else self.model.names
         # https://gist.github.com/AruniRC/7b3dadd004da04c80198557db5da4bda
-        self.cls_select = np.array([2,3,5,7]) # car,motocycle,bus,truck
+        self.cls_to_id = coco80_classes_to_id()        
         self.colors = [[np.random.randint(0, 255) for _ in range(3)] for _ in self.names]
 
-    def detect(self, img0, output_ratio=1):
-        # img0: cv2.imread
-        img0 = img0.copy()
+    def detect(self, img0, cls_select_name=None, conf_thres=None, iou_thres=None, img_size=None, do_visual=True, visual_ratio=1):
+        if cls_select_name is None:            
+            # detect all classes
+            cls_select_id = range(80)
+        else:
+            cls_select_id = []
+            for cls_name in cls_select_name:
+                if cls_name.lower() not in self.cls_to_id:
+                    print(f"Can not find class {cls_name}")                    
+                else:
+                    cls_select_id.append(self.cls_to_id[cls_name.lower()])
+
+        if conf_thres is None:
+            conf_thres = self.opt.conf_thres
+        if iou_thres is None: 
+            iou_thres = self.opt.iou_thres
+        if img_size is None:
+            img_size = self.imgsz
+        else:
+            img_size = check_img_size(self.imgsz, self.stride)
+
         # img: Padded resize
-        img = letterbox(img0, self.imgsz, stride=self.stride)[0]
-        img = img[:, :, ::-1].transpose(2, 0, 1) # BGR to RGB, to 3x416x416
-        img = np.ascontiguousarray(img)                
-        
+        img = letterbox(img0, img_size, stride=self.stride)[0]
+        if img.ndim == 2:  # convert grayscale image into color
+            img = np.tile(img, [1, 1, 3])        
+        img = np.ascontiguousarray(img.transpose(2, 0, 1)) # move the channel dimension in the front
         img = torch.from_numpy(img).to(self.device)
         img = img.half() if self.half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
-        if img.ndimension() == 3:
-            img = img.unsqueeze(0)
+        if img.ndim == 3:  # add the batch dimension in the front
+            img = img[None]
 
         # Inference
         with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
             pred = self.model(img)[0]
 
         # Apply NMS
-        pred = non_max_suppression(pred, self.opt.conf_thres, self.opt.iou_thres,\
-                                   classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
+        pred = non_max_suppression(pred, conf_thres, iou_thres, classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
 
         # Process detections
-        for i, det in enumerate(pred):  # detections per image            
+        output_box = np.zeros([0, 6])
+        for det in pred:
             if len(det):
                 # Rescale boxes from img_size to img size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    if int(cls) in self.cls_select:
-                      label = f'{self.names[int(cls)]} {conf:.2f}'
-                      plot_one_box(xyxy, img0, label=label, color=self.colors[int(cls)], line_thickness=3)
-        if output_ratio != 1:
-            img0 = img0[::output_ratio,::output_ratio]
+                    if int(cls) in cls_select_id:
+                        output_box = np.vstack([output_box, list(xyxy) + [cls] + [conf]])
+        return output_box
+    
+    def plot_box(self, img0, boxes, visual_ratio=1):
+        # boxes: Nx5 matrix: xyxy, label_id        
+        img0 = img0.copy()
+        for box in boxes:
+            label = f'{self.names[int(box[4])]} {box[5]:.2f}'
+            plot_one_box(box[:4], img0, label=label, color=self.colors[int(box[4])], line_thickness=3)    
+        if visual_ratio != 1:
+            img0 = img0[::visual_ratio, ::visual_ratio]
         return img0
-
