@@ -78,7 +78,7 @@ class ObjectDetector:
         if img_size is None:
             img_size = self.imgsz
         else:
-            img_size = check_img_size(self.imgsz, self.stride)
+            img_size = check_img_size(img_size, self.stride)
 
         # img: Padded resize
         img = letterbox(img0, img_size, stride=self.stride)[0]
