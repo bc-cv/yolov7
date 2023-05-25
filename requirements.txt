@@ -36,6 +36,8 @@ psutil  # system utilization
 thop  # FLOPs computation
 jupyterlab # local colab 
 ipywidgets
+wget
+ffmpeg
 # albumentations>=1.0.3
 # pycocotools>=2.0  # COCO mAP
 # roboflow
