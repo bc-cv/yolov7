@@ -8,7 +8,7 @@
 - On the terminal:
 ``` shell
 conda create -n yolov7
-source activate yolov7
+conda activate yolov7
 
 # pip install required packages
 conda install pip
